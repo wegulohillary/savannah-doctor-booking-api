@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets and environment variables
+.env
+.env.*
+
+# Allow a safe example environment file
+!.env.example
+
+# Django
+db.sqlite3
+staticfiles/
+media/
+
+# Testing and coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Editors and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
