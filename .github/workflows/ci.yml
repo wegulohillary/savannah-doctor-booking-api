@@ -66,5 +66,10 @@ jobs:
       - name: Apply database migrations
         run: python manage.py migrate --noinput
 
-      - name: Run automated tests
-        run: python manage.py test
+
+      - name: Run automated tests with coverage
+        run: coverage run --source=appointments,config manage.py test
+
+      - name: Report test coverage
+        if: always()
+        run: coverage report -m

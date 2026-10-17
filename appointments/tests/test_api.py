@@ -2,6 +2,7 @@
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -209,3 +210,150 @@ def test_reschedule_appointment(self):
         appointment.start_time,
         new_start,
     )
+    
+
+    def test_exactly_one_hour_ahead_is_accepted(self):
+        # Freeze the service clock to avoid a flaky boundary test.
+        with patch(
+            "appointments.services.booking.timezone.now",
+            return_value=self.start_time - timedelta(hours=1),
+        ):
+            response = self.book(self.start_time)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Appointment.objects.count(), 1)
+
+    def test_inactive_doctor_cannot_be_booked(self):
+        inactive_doctor = Doctor.objects.create(
+            name="Dr. Inactive",
+            specialty="Dermatology",
+            is_active=False,
+        )
+
+        payload = self.booking_payload()
+        payload["doctor_id"] = inactive_doctor.id
+
+        response = self.client.post(
+            "/api/appointments/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Appointment.objects.count(), 0)
+
+    def test_rescheduling_into_occupied_slot_is_rejected(self):
+        first_response = self.book(self.start_time)
+        second_start = self.start_time + timedelta(minutes=30)
+        second_response = self.book(second_start)
+
+        self.assertEqual(first_response.status_code, 201)
+        self.assertEqual(second_response.status_code, 201)
+
+        first_id = first_response.data["id"]
+
+        response = self.client.patch(
+            f"/api/appointments/{first_id}/reschedule/",
+            {"start_time": second_start.isoformat()},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        first_appointment = Appointment.objects.get(id=first_id)
+        self.assertEqual(first_appointment.start_time, self.start_time)
+
+    def test_upcoming_excludes_past_and_cancelled_appointments(self):
+        past_start = timezone.now() - timedelta(days=2)
+        future_start = self.start_time
+        cancelled_start = self.start_time + timedelta(minutes=30)
+
+        past_patient = Patient.objects.create(
+            full_name="Past Patient",
+            email="past@example.com",
+            phone_number="+254700000011",
+        )
+        future_patient = Patient.objects.create(
+            full_name="Future Patient",
+            email="future@example.com",
+            phone_number="+254700000012",
+        )
+        cancelled_patient = Patient.objects.create(
+            full_name="Cancelled Patient",
+            email="cancelled@example.com",
+            phone_number="+254700000013",
+        )
+
+        Appointment.objects.create(
+            doctor=self.doctor,
+            patient=past_patient,
+            start_time=past_start,
+            end_time=past_start + timedelta(minutes=30),
+            status="booked",
+        )
+        future_appointment = Appointment.objects.create(
+            doctor=self.doctor,
+            patient=future_patient,
+            start_time=future_start,
+            end_time=future_start + timedelta(minutes=30),
+            status="booked",
+        )
+        Appointment.objects.create(
+            doctor=self.doctor,
+            patient=cancelled_patient,
+            start_time=cancelled_start,
+            end_time=cancelled_start + timedelta(minutes=30),
+            status="cancelled",
+        )
+
+        response = self.client.get("/api/appointments/upcoming/")
+
+        self.assertEqual(response.status_code, 200)
+
+        returned_ids = {item["id"] for item in response.data}
+        self.assertEqual(returned_ids, {future_appointment.id})
+
+    def test_missing_booking_fields_are_rejected(self):
+        response = self.client.post(
+            "/api/appointments/",
+            {"doctor_id": self.doctor.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Appointment.objects.count(), 0)
+
+    def test_malformed_booking_datetime_is_rejected(self):
+        payload = self.booking_payload()
+        payload["start_time"] = "not-a-valid-datetime"
+
+        response = self.client.post(
+            "/api/appointments/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Appointment.objects.count(), 0)
+
+    def test_cancellation_releases_slot_for_rebooking(self):
+        first_response = self.book()
+        self.assertEqual(first_response.status_code, 201)
+
+        appointment_id = first_response.data["id"]
+        cancel_response = self.client.patch(
+            f"/api/appointments/{appointment_id}/cancel/"
+        )
+        self.assertEqual(cancel_response.status_code, 200)
+
+        rebooking_response = self.book(self.start_time)
+        self.assertEqual(rebooking_response.status_code, 201)
+
+        self.assertEqual(
+            Appointment.objects.filter(
+                doctor=self.doctor,
+                start_time=self.start_time,
+                status="booked",
+            ).count(),
+            1,
+        )
