@@ -31,6 +31,18 @@ from appointments.services.booking import (
 )
 
 
+class HealthView(APIView):
+    def get(self, request):
+        return Response(
+            {
+                "status": "ok",
+                "service": "savannah-doctor-booking-api",
+                "message": "API is running",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class BookingAPIException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Unable to process the booking."

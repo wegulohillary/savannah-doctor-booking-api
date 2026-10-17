@@ -8,10 +8,16 @@ from appointments.views import (
     AppointmentRescheduleView,
     DoctorAvailabilityView,
     DoctorListView,
+    HealthView,
     UpcomingAppointmentsView,
 )
 
 urlpatterns = [
+    path(
+        "health/",
+        HealthView.as_view(),
+        name="health-check",
+    ),
     path(
         "doctors/",
         DoctorListView.as_view(),
