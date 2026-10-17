@@ -53,7 +53,7 @@ def booking_error_response(exc):
     if isinstance(exc, BookingTooSoon):
         code = status.HTTP_400_BAD_REQUEST
     elif isinstance(exc, SlotUnavailable):
-        code = status.HTTP_409_CONFLICT
+        code = status.HTTP_400_BAD_REQUEST
     elif isinstance(exc, InvalidBooking):
         code = status.HTTP_400_BAD_REQUEST
     else:

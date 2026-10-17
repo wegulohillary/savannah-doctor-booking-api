@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 import dj_database_url
 import os
+import sys
 import environ
 from pathlib import Path
 
@@ -83,42 +84,50 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-database_url = env("DATABASE_URL", default="")
-
-if database_url:
+if "test" in sys.argv:
     DATABASES = {
-        "default": dj_database_url.parse(
-            database_url,
-            conn_max_age=600,
-            ssl_require=not DEBUG,
-        )
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "test_db.sqlite3",
+        }
     }
 else:
-    db_name = env("DB_NAME", default="")
-    db_user = env("DB_USER", default="")
-    db_password = env("DB_PASSWORD", default="")
-    db_host = env("DB_HOST", default="127.0.0.1")
-    db_port = env("DB_PORT", default="5432")
+    database_url = env("DATABASE_URL", default="")
 
-    if db_name and db_user and db_password:
+    if database_url:
         DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": db_name,
-                "USER": db_user,
-                "PASSWORD": db_password,
-                "HOST": db_host,
-                "PORT": db_port,
-                "CONN_MAX_AGE": 60,
-            }
+            "default": dj_database_url.parse(
+                database_url,
+                conn_max_age=600,
+                ssl_require=not DEBUG,
+            )
         }
     else:
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.sqlite3",
-                "NAME": BASE_DIR / "db.sqlite3",
+        db_name = env("DB_NAME", default="")
+        db_user = env("DB_USER", default="")
+        db_password = env("DB_PASSWORD", default="")
+        db_host = env("DB_HOST", default="127.0.0.1")
+        db_port = env("DB_PORT", default="5432")
+
+        if db_name and db_user and db_password:
+            DATABASES = {
+                "default": {
+                    "ENGINE": "django.db.backends.postgresql",
+                    "NAME": db_name,
+                    "USER": db_user,
+                    "PASSWORD": db_password,
+                    "HOST": db_host,
+                    "PORT": db_port,
+                    "CONN_MAX_AGE": 60,
+                }
             }
-        }
+        else:
+            DATABASES = {
+                "default": {
+                    "ENGINE": "django.db.backends.sqlite3",
+                    "NAME": BASE_DIR / "db.sqlite3",
+                }
+            }
 
 
 # Password validation
